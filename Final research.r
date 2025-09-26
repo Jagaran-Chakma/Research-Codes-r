@@ -423,7 +423,7 @@ if (nrow(all_importance) > 0) {
   cat("Final plot saved as 'final_importance_plot.png'\n")
 }
 
-cat("\n✅ VARIABLE IMPORTANCE ANALYSIS COMPLETED SUCCESSFULLY!\n")
+cat("\n VARIABLE IMPORTANCE ANALYSIS COMPLETED SUCCESSFULLY!\n")
 
 
 
@@ -529,22 +529,22 @@ if (nrow(br_importance_all) > 0) {
   
   # Save plot
   ggsave("binary_relevance_importance.png", p, width = 12, height = 8, dpi = 300, bg = "white")
-  cat("\n✅ Graph saved as 'binary_relevance_importance.png'\n")
+  cat("\n Graph saved as 'binary_relevance_importance.png'\n")
   
   # Save results to CSV
   write.csv(avg_importance, "binary_relevance_importance.csv", row.names = FALSE)
-  cat("✅ Results saved as 'binary_relevance_importance.csv'\n")
+  cat(" Results saved as 'binary_relevance_importance.csv'\n")
   
   # Performance info
-  cat("\n📊 BINARY RELEVANCE PERFORMANCE:\n")
+  cat("\n BINARY RELEVANCE PERFORMANCE:\n")
   cat("Hamming Loss:", round(res_br$aggr["multilabel.hamloss"], 4), "\n")
   cat("F1 Score:", round(res_br$aggr["multilabel.f1"], 4), "\n")
   
 } else {
-  cat("❌ No importance data extracted. Check your data.\n")
+  cat(" No importance data extracted. Check your data.\n")
 }
 
-cat("\n✅ BINARY RELEVANCE ANALYSIS COMPLETED!\n")
+cat("\n BINARY RELEVANCE ANALYSIS COMPLETED!\n")
 
 
 
@@ -597,3 +597,4 @@ p2 <- ggplot(freq_data, aes(x = "", y = Frequency, fill = HealthProblem)) +
 
 print(p2)
 ggsave("health_problems_pie.png", p2, width = 8, height = 8, dpi = 300)
+
