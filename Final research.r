@@ -14,10 +14,12 @@ head(data, 30)       # FIRST 20 ROWS
 tail(data, 30)       # LAST 20 ROWS
 data[50:60, ]        # FOR SPECIFIC RANGE
 
-data$name<- NULL
-data$reason_of_water_scarcity <- NULL
-data$age<-NULL
-data$water_affects_work<- NULL
+
+library(dplyr)
+
+# Remove several columns by name
+data <- data %>%
+  select(-c(name,age, reason_of_water_scarcity, water_affects_work))
 
 
 
@@ -79,7 +81,7 @@ sum(is.na(data$husband_occu))
 library(dplyr)
 library(stringr)
 data <- data %>%
-  mutate(across(c(sources_of_water, distance_of_source, edu_level, 
+  mutate(across(c(water_source, distance_of_source, edu_level, 
                   drink_from_unreliable_sources, recent_health_problems,
                   time_of_feeling_anxiety
   ),  # list of columns
@@ -99,15 +101,17 @@ data <- data %>%
                   "water_for_handwashing",
                   "drink_from_unreliable_sources", "menstrual_hygiene",
                   "exp_health_issue","medical_evidence",
-                  "time_of_feeling_anxiety","govt_programs","recent_health_problems",
-                  ,"husband_occu"), as.factor))
+                  "time_of_feeling_anxiety","govt_programs",
+                  "recent_health_problems",
+                  "husband_occu"), as.factor))
 
 
 str(data)
 
 
 
-
+library(tidyverse)
+library(tidyr)
 class(data$recent_health_problems)
 data$ID <- 1:nrow(data)
 # Clean up extra spaces, double commas
@@ -124,6 +128,7 @@ data_long <- data %>%
   separate_rows(recent_health_problems, sep = ",") %>%
   filter(!is.na(recent_health_problems)) %>%
   mutate(label = 1)
+
 
 # Wide format: one binary column per health problem
 data_wide <- pivot_wider(data_long, 
@@ -144,25 +149,18 @@ print(full_data$recent_health_problems)
 
 
 
-
-
-
 #MULTILABEL CLASSIFICATION
-library(utiml)
-library(mldr)
-library(randomForest)
-library(caret)
-
-
 names(full_data)
-full_data$husband_occu<- NULL
-full_data$ID<- NULL
-full_data$unmarr_face_challenges<- NULL
-full_data$time_of_feeling_anxiety <-NULL
-full_data$data$husband_occu<- NULL
-full_data$mental_stress_level <-NULL
-full_data$medical_evidence<- NULL
 
+
+library(dplyr)
+full_data <- full_data %>%
+  select(-c(menstrual_hygiene,unmarr_face_challenges, husband_occu,
+            mental_stress_level, medical_evidence,exp_health_issue,ID,
+            time_of_feeling_anxiety))
+
+
+#RENAMING THE DATASET
 library(dplyr)
 full_data <- full_data %>%
   rename(
@@ -175,84 +173,77 @@ full_data <- full_data %>%
     malnutrition ="Malnutrition"
   )
 
+
+
+
+
+
+
+library(mlr3verse)
+library(mlr3learners)
+library(dplyr)
+library(randomForest)
+library(mlr)
+library(mlr3)
+
 label_columns<- c("diarrhea", "skin_disease", 
-          "malnutrition", "dehydration","others",
-           "uti", "rhi" )
+                  "malnutrition", "dehydration","others",
+                  "uti", "rhi" )
 
 # Features are all other columns
 feature_columns <- setdiff(names(full_data), label_columns)
 # Make sure dependent vars are in df
 colnames(full_data)
 
-
-
-#CONVERTING TO A MULTI-LABEL TASK
+#MOST IMPORTANT ONE
+#CLASSIFIER CHAINS WITH RANDOM FOREST + 5 CROSS VALIDATION
 multilabel_df <- full_data[, c(feature_columns, label_columns)]
-# Convert labels to logical (if not already)
-multilabel_df[label_columns] <- lapply(multilabel_df[label_columns], as.logical)
-
-library(mlr3verse)
-library(mlr3learners)
-library(dplyr)
 
 # Convert character columns to factors (required by mlr3)
 multilabel_df <- multilabel_df %>%
   mutate(across(where(is.character), as.factor))
 
-# Create task using the correct function name
-library(mlr)
-# Create multi-label task
-task <- makeMultilabelTask(data = multilabel_df, target = label_columns)
+# Manually fix factor levels for water_source
+multilabel_df$water_source <- factor(multilabel_df$water_source, 
+                                     levels = unique(multilabel_df$water_source))
 
 
-#MOST IMPORTANT ONE
-#CLASSIFIER CHAINS WITH RANDOM FOREST + 5 CROSS VALIDATION
-# Load libraries
-library(mlr)
-library(randomForest)
-library(dplyr)
-
-# Assume 'multilabel_df' is your dataset
-# Ensure label columns are logical
-label_columns <- c("diarrhea", "skin_disease", "malnutrition", 
-                   "dehydration", "others", "uti", "rhi")
+# Convert labels to logical (if not already)
 multilabel_df[label_columns] <- lapply(multilabel_df[label_columns], as.logical)
+
 
 # Remove problematic columns if any
 multilabel_df <- multilabel_df[, !names(multilabel_df) %in% c("recent_health_problems")]
 
-# Create a multi-label task
+#CONVERTING TO A MULTI-LABEL TASK
 task <- makeMultilabelTask(data = multilabel_df, target = label_columns)
 
 # Define base learner: Random Forest
 base_learner <- makeLearner(
   "classif.randomForest",
   predict.type = "prob",
-  par.vals = list(mtry = 2, ntree = 223)  # adjust as needed
+  par.vals = list(mtry = 2, ntree = 223,
+  importance= TRUE)
 )
 
-# Wrap base learner with Classifier Chains
+
+#WRAP the base learner for multi-label classification
 chain_learner <- makeMultilabelClassifierChainsWrapper(base_learner)
 
 # Define 5-fold cross-validation
 rdesc <- makeResampleDesc("CV", iters = 5)
 
-# Run cross-validation
-res <- resample(
+#RUN RESAMPLING WITH WRAPPED LEARNER
+res_cc <- resample(
   learner = chain_learner,
   task = task,
   resampling = rdesc,
-  measures = list(
-    multilabel.hamloss,    # label-wise error
-    multilabel.subset01,   # strict subset accuracy
-    multilabel.acc,        # label-wise accuracy
-    multilabel.f1          # F1 score
-  ),
-  show.info = TRUE
+  measures = list(multilabel.hamloss, multilabel.subset01, multilabel.acc, multilabel.f1)
 )
 
-# Print average performance across folds
-print(res$aggr)
+print(res_cc$aggr)
+
+
 
 
 
@@ -325,7 +316,7 @@ simple_rf <- randomForest(
   x = x_data,
   y = y_data,
   importance = TRUE,
-  ntree = 100  # Reduced for speed
+  ntree = 200  # Reduced for speed
 )
 
 # Extract importance
@@ -343,7 +334,7 @@ if (!is.null(simple_rf$importance)) {
   
   # Simple plot
   library(ggplot2)
-  p_simple <- ggplot(head(imp_data, 15), 
+  p_simple <- ggplot(head(imp_data, 10), 
                      aes(x = importance, y = reorder(feature, importance))) +
     geom_col(fill = "darkred", alpha = 0.8) +
     labs(title = paste("Feature Importance for", label_columns[1]),
@@ -382,7 +373,7 @@ for (label in label_columns) {
       x = x_clean,
       y = y_clean,
       importance = TRUE,
-      ntree = 100
+      ntree = 200
     )
     
     if (!is.null(rf_model$importance)) {
@@ -407,14 +398,14 @@ if (nrow(all_importance) > 0) {
   avg_imp <- aggregate(importance ~ feature, data = all_importance, FUN = mean)
   avg_imp <- avg_imp[order(-avg_imp$importance), ]
   
-  cat("Top 15 features overall:\n")
-  print(head(avg_imp, 15))
+  cat("Top 10 features overall:\n")
+  print(head(avg_imp, 10))
   
   # Create final plot
-  p_final <- ggplot(head(avg_imp, 15), 
+  p_final <- ggplot(head(avg_imp, 10), 
                     aes(x = importance, y = reorder(feature, importance))) +
     geom_col(fill = "steelblue", alpha = 0.8) +
-    labs(title = "Top 15 Most Important Features Across All Health Problems",
+    labs(title = "Top 10 Most Important Features Across All Health Problems",
          x = "Average Importance", y = "Features") +
     theme_minimal()
   
@@ -449,7 +440,7 @@ x_data <- as.data.frame(lapply(x_data, function(col) {
 }))
 
 # BINARY RELEVANCE IMPORTANCE EXTRACTION
-cat("\nEXTRACTING VARIABLE IMPORTANCE...\n")
+cat("\n EXTRACTING VARIABLE IMPORTANCE...\n")
 
 br_importance_all <- data.frame()
 
@@ -469,7 +460,7 @@ for (label in label_columns) {
       x = x_clean,
       y = y_clean,
       importance = TRUE,
-      ntree = 100
+      ntree = 200
     )
     
     if (!is.null(rf_model$importance)) {
@@ -494,8 +485,8 @@ if (nrow(br_importance_all) > 0) {
   avg_importance <- aggregate(importance ~ feature, data = br_importance_all, FUN = mean)
   avg_importance <- avg_importance[order(-avg_importance$importance), ]
   
-  cat("Top 15 Most Important Features:\n")
-  for (i in 1:min(15, nrow(avg_importance))) {
+  cat("Top 10 Most Important Features:\n")
+  for (i in 1:min(10, nrow(avg_importance))) {
     cat(i, ". ", avg_importance$feature[i], " (", 
         round(avg_importance$importance[i], 2), ")\n", sep = "")
   }
@@ -504,13 +495,13 @@ if (nrow(br_importance_all) > 0) {
   library(ggplot2)
   
   # Take top 15 features for clear visualization
-  plot_data <- head(avg_importance, 15)
+  plot_data <- head(avg_importance, 10)
   
   p <- ggplot(plot_data, aes(x = importance, y = reorder(feature, importance))) +
     geom_col(fill = "steelblue", alpha = 0.8, width = 0.7) +
     labs(
       title = "Variable Importance - Binary Relevance Method",
-      subtitle = "Top 15 Most Important Predictors of Health Problems",
+      subtitle = "Top 10 Most Important Predictors of Health Problems",
       x = "Average Importance Score (Mean Decrease Gini)",
       y = "Features"
     ) +
@@ -529,11 +520,11 @@ if (nrow(br_importance_all) > 0) {
   
   # Save plot
   ggsave("binary_relevance_importance.png", p, width = 12, height = 8, dpi = 300, bg = "white")
-  cat("\n Graph saved as 'binary_relevance_importance.png'\n")
+  cat("\n✅ Graph saved as 'binary_relevance_importance.png'\n")
   
   # Save results to CSV
   write.csv(avg_importance, "binary_relevance_importance.csv", row.names = FALSE)
-  cat(" Results saved as 'binary_relevance_importance.csv'\n")
+  cat("Results saved as 'binary_relevance_importance.csv'\n")
   
   # Performance info
   cat("\n BINARY RELEVANCE PERFORMANCE:\n")
@@ -541,7 +532,7 @@ if (nrow(br_importance_all) > 0) {
   cat("F1 Score:", round(res_br$aggr["multilabel.f1"], 4), "\n")
   
 } else {
-  cat(" No importance data extracted. Check your data.\n")
+  cat("No importance data extracted. Check your data.\n")
 }
 
 cat("\n BINARY RELEVANCE ANALYSIS COMPLETED!\n")
@@ -552,49 +543,13 @@ cat("\n BINARY RELEVANCE ANALYSIS COMPLETED!\n")
 
 
 
-# BAR PLOT - Frequency of Health Problems
-library(ggplot2)
-
-# Calculate frequencies
-freq_data <- data.frame(
-  HealthProblem = label_columns,
-  Frequency = sapply(multilabel_df[label_columns], function(x) sum(x == TRUE)),
-  Percentage = sapply(multilabel_df[label_columns], function(x) round(100 * sum(x == TRUE) / length(x), 1))
-)
-
-# Sort by frequency
-freq_data <- freq_data[order(-freq_data$Frequency), ]
-
-# Create bar plot
-p1 <- ggplot(freq_data, aes(x = reorder(HealthProblem, Frequency), y = Frequency)) +
-  geom_col(fill = "steelblue", alpha = 0.8) +
-  geom_text(aes(label = paste0(Frequency, " (", Percentage, "%)")), 
-            hjust = -0.1, size = 3.5) +
-  labs(title = "Frequency of Health Problems",
-       subtitle = "Number and Percentage of Cases",
-       x = "Health Problems",
-       y = "Number of Cases") +
-  coord_flip() +  # Horizontal bars for better readability
-  theme_minimal() +
-  theme(plot.title = element_text(face = "bold", size = 14))
-
-print(p1)
-ggsave("health_problems_frequency.png", p1, width = 10, height = 6, dpi = 300)
 
 
 
 
-# PIE CHART - Distribution of Health Problems
-p2 <- ggplot(freq_data, aes(x = "", y = Frequency, fill = HealthProblem)) +
-  geom_bar(stat = "identity", width = 1) +
-  coord_polar("y", start = 0) +
-  labs(title = "Distribution of Health Problems",
-       fill = "Health Problems") +
-  theme_void() +
-  theme(plot.title = element_text(face = "bold", hjust = 0.5)) +
-  geom_text(aes(label = paste0(Percentage, "%")), 
-            position = position_stack(vjust = 0.5), size = 4)
 
-print(p2)
-ggsave("health_problems_pie.png", p2, width = 8, height = 8, dpi = 300)
+
+
+
+
 
