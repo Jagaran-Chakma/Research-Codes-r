@@ -520,7 +520,7 @@ if (nrow(br_importance_all) > 0) {
   
   # Save plot
   ggsave("binary_relevance_importance.png", p, width = 12, height = 8, dpi = 300, bg = "white")
-  cat("\n✅ Graph saved as 'binary_relevance_importance.png'\n")
+  cat("\n Graph saved as 'binary_relevance_importance.png'\n")
   
   # Save results to CSV
   write.csv(avg_importance, "binary_relevance_importance.csv", row.names = FALSE)
@@ -536,6 +536,7 @@ if (nrow(br_importance_all) > 0) {
 }
 
 cat("\n BINARY RELEVANCE ANALYSIS COMPLETED!\n")
+
 
 
 
