@@ -146,9 +146,6 @@ print(full_data$recent_health_problems)
 
 
 
-
-
-
 #MULTILABEL CLASSIFICATION
 names(full_data)
 
@@ -172,9 +169,6 @@ full_data <- full_data %>%
     others= "Others",
     malnutrition ="Malnutrition"
   )
-
-
-
 
 
 
@@ -540,17 +534,100 @@ cat("\n BINARY RELEVANCE ANALYSIS COMPLETED!\n")
 
 
 
+library(kableExtra)
+
+research_table <- correct_data %>%
+  mutate(Value = sprintf("%.4f", Value)) %>%
+  tidyr::pivot_wider(names_from = Model, values_from = Value) %>%
+  arrange(factor(Metric, levels = c("Accuracy", "F1 Score", "Subset Accuracy", "Hamming Loss")))
+
+kable(research_table, format = "html", caption = "Multi-label Classification Performance Metrics") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE) %>%
+  add_header_above(c(" " = 1, "Method" = 2)) %>%
+  footnote(general = "Results based on 5-fold cross-validation. Higher values indicate better performance for Accuracy, F1-Score, and Subset Accuracy. Lower values indicate better performance for Hamming Loss.")
 
 
 
 
+library(ggplot2)
+library(dplyr)
+# Your data with CORRECT values
+correct_data <- data.frame(
+  Metric = rep(c("Accuracy", "F1 Score", "Subset Accuracy", "Hamming Loss"), 2),
+  Model = rep(c("Binary Relevance (RF)", "Classifier Chains (RF)"), each = 4),
+  Value = c(0.221, 0.281, 0.842, 0.233, 0.237, 0.280, 0.875, 0.235)
+)
+
+# Create the final research-ready plot
+ggplot(correct_data, aes(x = Metric, y = Value, fill = Model)) +
+  geom_bar(stat = "identity", position = position_dodge(0.8), width = 0.7, alpha = 0.9) +
+  geom_text(aes(label = sprintf("%.3f", Value)), 
+            position = position_dodge(0.8), vjust = -0.5, size = 3.5, fontface = "bold") +
+  scale_fill_manual(values = c("Binary Relevance (RF)" = "#E41A1C", 
+                               "Classifier Chains (RF)" = "#377EB8")) +
+  labs(title = "Multi-label Classification Performance Comparison",
+       subtitle = "Random Forest Base Classifier | 5-Fold Cross-Validation",
+       y = "Metric Value",
+       x = "",
+       caption = "Note: Higher values are better for Accuracy, F1-Score, and Subset Accuracy\nLower values are better for Hamming Loss") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+    plot.subtitle = element_text(hjust = 0.5, color = "gray40", size = 11),
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 10),
+    legend.position = "top",
+    legend.title = element_text(face = "bold"),
+    panel.grid.major = element_line(color = "gray90"),
+    panel.grid.minor = element_blank(),
+    plot.caption = element_text(color = "gray50", size = 9, hjust = 0)
+  ) +
+  ylim(0, 1.0)
+
+# Save for publication
+ggsave("final_research_figure.pdf", width = 10, height = 6, dpi = 300)
+ggsave("final_research_figure.png", width = 10, height = 6, dpi = 300)
 
 
 
 
+library(ggplot2)
+library(dplyr)
+# Your data
+correct_data <- data.frame(
+  Metric = rep(c("Accuracy", "F1 Score", "Subset Accuracy", "Hamming Loss"), 2),
+  Model = rep(c("Binary Relevance (RF)", "Classifier Chains (RF)"), each = 4),
+  Value = c(# Binary Relevance (RF) - ALL 4 metrics
+    0.2208333,   # Accuracy
+    0.2813889,   # F1 Score
+    0.9416667,   # Subset Accuracy - REPLACE WITH YOUR ACTUAL VALUE
+    0.2333333,   # Hamming Loss
+    
+    # Classifier Chains (RF) - ALL 4 metrics  
+    0.2375000,   # Accuracy
+    0.2802778,   # F1 Score
+    0.8750000,   # Subset Accuracy - REPLACE WITH YOUR ACTUAL VALUE
+    0.2345238 )   # Hamming Loss
+)
 
+# Create professional research figure
+ggplot(correct_data, aes(x = Metric, y = Value, fill = Model)) +
+  geom_col(position = position_dodge(0.8), width = 0.7) +
+  geom_text(aes(label = sprintf("%.3f", Value)), 
+            position = position_dodge(0.8), vjust = -0.5, size = 4) +
+  scale_fill_manual(values = c("Binary Relevance (RF)" = "#E41A1C", 
+                               "Classifier Chains (RF)" = "#377EB8")) +
+  labs(title = "Multi-label Classification Performance Comparison",
+       subtitle = "Random Forest Base Classifier | 5-Fold Cross-Validation",
+       y = "Metric Value",
+       x = "") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 16),
+    plot.subtitle = element_text(hjust = 0.5, size = 12),
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 11),
+    legend.position = "top"
+  ) +
+  ylim(0, 1.0)
 
-
-
-
-
+# Save it
+ggsave("research_figure.png", width = 10, height = 6, dpi = 300)
